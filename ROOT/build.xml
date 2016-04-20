@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<project default="deploy">
+
+    <path id="classpath">
+        <fileset dir="/usr/share/tomcat7/lib/" includes="*.jar"/>
+    </path>
+
+    <target name="clean">
+        <delete dir="build" />
+        <delete dir="deploy" />
+    </target>
+
+    <target name="compile" depends="clean">
+        <mkdir dir="build/WEB-INF/classes" />
+        <javac destdir="build/WEB-INF/classes">
+            <src path="src"/>
+            <classpath refid="classpath"/>
+        </javac>
+    </target>
+
+    <target name="deploy" depends="compile">
+        <copy file="web.xml" tofile="build/WEB-INF/web.xml" />
+        <mkdir dir="deploy" />
+        <jar destfile="deploy/ROOT.war" basedir="build"></jar>
+    </target>
+
+</project>

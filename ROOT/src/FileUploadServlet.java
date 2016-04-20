@@ -90,78 +90,80 @@ public class FileUploadServlet extends HttpServlet
             fileName = getFileName(part);
             InputStream inpSt = part.getInputStream();
 
-            XSSFWorkbook workbook = new XSSFWorkbook(inpSt); 
-            Sheet firstSheet = workbook.getSheetAt(0);
-     
-            for (Iterator<Row> rit = firstSheet.rowIterator(); rit.hasNext();)
-            {
-                ArrayList<String> cells = new ArrayList<String>();
-                int count = 0;
-                Row row = rit.next();
+            //try stmt in case they up'd wrong ftype
+            try {
+                XSSFWorkbook workbook = new XSSFWorkbook(inpSt); 
 
-                for(int i = 0; i<7; i++)
+                Sheet firstSheet = workbook.getSheetAt(0);
+         
+                for (Iterator<Row> rit = firstSheet.rowIterator(); rit.hasNext();)
                 {
-                    Cell cell = row.getCell(i, Row.CREATE_NULL_AS_BLANK);
+                    ArrayList<String> cells = new ArrayList<String>();
+                    int count = 0;
+                    Row row = rit.next();
 
-                    if(i!=4)
+                    for(int i = 0; i<7; i++)
                     {
-                        switch (cell.getCellType()) 
+                        Cell cell = row.getCell(i, Row.CREATE_NULL_AS_BLANK);
+
+                        if(i!=4)
                         {
-                            case Cell.CELL_TYPE_STRING:              
-                            String place = cell.toString();
-                            cells.add(place);        
-                            break;
-                            case Cell.CELL_TYPE_BLANK:
-                            String value = "";
-                            cells.add(value); 
-                            break;
-                            case Cell.CELL_TYPE_NUMERIC:
-                            String number = cell.toString();
-                            cells.add(number); 
-                            break;
+                            switch (cell.getCellType()) 
+                            {
+                                case Cell.CELL_TYPE_STRING:              
+                                String place = cell.toString();
+                                cells.add(place);        
+                                break;
+                                case Cell.CELL_TYPE_BLANK:
+                                String value = "";
+                                cells.add(value); 
+                                break;
+                                case Cell.CELL_TYPE_NUMERIC:
+                                String number = cell.toString();
+                                cells.add(number); 
+                                break;
+                            }
                         }
+                        _rows.put(count, cells);
                     }
-                    _rows.put(count, cells);
+
+                    workbook.close();
+
+                    for(int key : _rows.keySet())
+                    {
+                        ArrayList<String> fields = _rows.get(key);
+                        _zipcodeMap = getZipcodeMap(fields);   
+                    }
                 }
-
-                workbook.close();
-
-                for(int key : _rows.keySet())
+                  
+                for(int Key : _zipcodeMap.keySet())
                 {
-                    ArrayList<String> fields = _rows.get(key);
-                    _zipcodeMap = getZipcodeMap(fields);   
+                    Object zipcode = _zipcodeMap.get(Key);
+
+                    List<String> list = new ArrayList<String>();
+                    String Zipcode = zipcode.toString();
+                    list.add(Zipcode); 
+
+                    String[] name = fileName.split("\\.");
+                    shortName = name[0] + ".txt";	
+                    fullName = _filePath + name[0] + ".txt";
+
+                    useBufferedWriter(list, fullName);
                 }
+            
+                _zipcodeMap.clear();
+                _rows.clear();    
+                File file = new File(request.getServletContext().getAttribute("FILES_DIR")+File.separator+shortName);
+                out.write("File "+shortName+ " uploaded successfully.");
+                out.write("<br>");
+                out.write("<a href=\"/tmp/"+shortName+"\">Download "+shortName+"</a>");
+
+            } catch(org.apache.poi.POIXMLException e) {
+                out.write("<div> Only .xlsx files are supported at this time. </div>");
             }
-              
-            for(int Key : _zipcodeMap.keySet())
-            {
-                Object zipcode = _zipcodeMap.get(Key);
-
-                List<String> list = new ArrayList<String>();
-                String Zipcode = zipcode.toString();
-                list.add(Zipcode); 
-
-                String[] name = fileName.split("\\.");
-                shortName = name[0] + ".txt";	
-                fullName = _filePath + name[0] + ".txt";
-
-                useBufferedWriter(list, fullName);
-            }
-        
-            _zipcodeMap.clear();
-            _rows.clear();    
-            File file = new File(request.getServletContext().getAttribute("FILES_DIR")+File.separator+shortName);
-            out.write("File "+shortName+ " uploaded successfully.");
-            out.write("<br>");
-            out.write("<a href=\"/tmp/"+shortName+"\">Download "+shortName+"</a>");
-
-        }        
+            out.write("</body></html>");
+        }
     }
-  
-    //NO GET METHOD FOR NOW...
-    //protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        //doPost(request, response); //just forward for now
-    //}
   
     private String getFileName(Part part) throws NullPointerException {
         /** getFileName: get file name from HTTP header content-disposition.  */

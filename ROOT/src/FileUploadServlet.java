@@ -153,7 +153,7 @@ public class FileUploadServlet extends HttpServlet
             File file = new File(request.getServletContext().getAttribute("FILES_DIR")+File.separator+shortName);
             out.write("File "+shortName+ " uploaded successfully.");
             out.write("<br>");
-            out.write("<a href=\"FileUploadServlet?shortName="+shortName+"\">Download "+shortName+"</a>");
+            out.write("<a href=\"/tmp/"+shortName+"\">Download "+shortName+"</a>");
 
         }        
     }

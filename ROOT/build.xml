@@ -20,6 +20,7 @@
 
     <target name="deploy" depends="compile">
         <copy file="web.xml" tofile="build/WEB-INF/web.xml" />
+        <copy file="index.html" tofile="build/index.html" />
         <mkdir dir="deploy" />
         <jar destfile="deploy/ROOT.war" basedir="build"></jar>
     </target>

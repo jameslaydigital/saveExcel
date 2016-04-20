@@ -7,7 +7,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
-  
 
 import javax.servlet.ServletContext;
 import javax.servlet.ServletOutputStream;
@@ -35,12 +34,12 @@ public class FileUploadServlet extends HttpServlet
 
     private static class _FIELDS {
         //constants used to access fields by their column number
-        private int zip = 0;
-        private int type = 1;
-        private int city = 2;
-        private int acceptableCity = 3;
-        private int state = 4;
-        private int county = 5;
+        private static int zip = 0;
+        private static int type = 1;
+        private static int city = 2;
+        private static int acceptableCity = 3;
+        private static int state = 4;
+        private static int county = 5;
     }
 
     private static class Zipcode
@@ -70,7 +69,7 @@ public class FileUploadServlet extends HttpServlet
     }
 
     protected void doPost(HttpServletRequest request,
-            HttpServletResponse response) throws ServletException, IOException
+            HttpServletResponse response) throws ServletException, IOException, NullPointerException
     {
 
         /** doPost: save .xlsx multipart upload as bar delimited file at
@@ -164,7 +163,7 @@ public class FileUploadServlet extends HttpServlet
         //doPost(request, response); //just forward for now
     //}
   
-    private String getFileName(Part part) throws Exception {
+    private String getFileName(Part part) throws NullPointerException {
         /** getFileName: get file name from HTTP header content-disposition.  */
 
         String contentDisp = part.getHeader("content-disposition");
@@ -176,10 +175,9 @@ public class FileUploadServlet extends HttpServlet
             }
         }
         throw new NullPointerException("Request header did not contain a file name.");
-        return null;
     }
 
-    public static HashMap<Integer, Zipcode> getZipcodeMap(ArrayList<String> fieldArr)
+    public static HashMap<Integer, Object> getZipcodeMap(ArrayList<String> fieldArr)
     {
         int count = 1; //start at 1 to skip the header. TODO is there still a header?
 

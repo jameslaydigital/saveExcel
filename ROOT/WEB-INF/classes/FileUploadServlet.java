@@ -25,14 +25,29 @@ import javax.servlet.http.Part;
                  maxRequestSize=1024*1024*100)      // 100 MB
 public class FileUploadServlet extends HttpServlet
 {
-    private static HashMap<Integer, ArrayList<String>> inputMap = new HashMap<Integer, ArrayList<String>>();
-    private static HashMap<Integer, Object> fieldMap = new HashMap<Integer, Object>();
-    private static final String FILEPATH = "/var/lib/tomcat7/webapps/ROOT/tmp/";        
-    private static final long serialVersionUID = 205242440643911308L;
-    
+    /** FileUploadServlet processes a multipart mime .xlsx upload and converts
+     *  it to a bar-delimited csv before saving it to the local server.
+     *  (currently doesn't support any other file format) */
+
+    private static HashMap<Integer, ArrayList<String>> _rows = new HashMap<Integer, ArrayList<String>>();
+    private static HashMap<Integer, Object> _zipcodeMap = new HashMap<Integer, Object>();
+    private static final String _filePath = "/var/lib/tomcat7/webapps/ROOT/tmp/";        
+
+    private static class _FIELDS {
+        //constants used to access fields by their column number
+        private int zip = 0;
+        private int type = 1;
+        private int city = 2;
+        private int acceptableCity = 3;
+        private int state = 4;
+        private int county = 5;
+    }
 
     private static class Zipcode
     {
+        //Zipcode represents a row in the spreadsheet
+        //TODO: Perhaps consider renaming to Row?
+        //EDIT: Row is already an object in POI.
         private String zip;
         private String city;
         private String state;
@@ -53,27 +68,24 @@ public class FileUploadServlet extends HttpServlet
             return  zip.trim() +"|"+city.trim()+"|"+state.trim()+"|"+county.trim();
         }
     }
-    
-    /**
-     * Directory where uploaded files will be saved, its relative to
-     * the web application directory.
-     */
-    private static final String UPLOAD_DIR = "tmp";
-      
-    protected void doPost(HttpServletRequest request,
-            HttpServletResponse response) throws ServletException, IOException 
-    {
-         response.setContentType("text/html");
-	     PrintWriter out = response.getWriter();
-        out.write("<html><head></head><body>");
-//      fieldMap.clear();
-//        inputMap.clear(); 
 
-        String fileName = null;
-//	 String[] name = fileName.split("\\.");
-        String shortName = null;
-	 String fullName = null; // FILEPATH + name[0] + ".txt";
+    protected void doPost(HttpServletRequest request,
+            HttpServletResponse response) throws ServletException, IOException
+    {
+
+        /** doPost: save .xlsx multipart upload as bar delimited file at
+         * "/tmp". */
+
+        response.setContentType("text/html");
+        PrintWriter out = response.getWriter();
+        out.write("<html><head></head><body>");
+
+        String fileName  = null; //the name of the file as uploaded.
+        String shortName = null; //the basename of output file
+        String fullName  = null; //the pathname + basename of output file
+
         //Get all the parts from request and write it to the file on server
+        //_rows = [str(cell) for cell in [row for row in [part for part in request.getParts()]]]
         for (Part part : request.getParts())
         {
             fileName = getFileName(part);
@@ -82,117 +94,79 @@ public class FileUploadServlet extends HttpServlet
             XSSFWorkbook workbook = new XSSFWorkbook(inpSt); 
             Sheet firstSheet = workbook.getSheetAt(0);
      
-        	for (Iterator<Row> rit = firstSheet.rowIterator(); rit.hasNext();)
-        	{
-        	    ArrayList<String> rows = new ArrayList<String>();
-        	    int count = 0;
-        	    Row row = rit.next();
-      
-        	   for(int i = 0; i<7; i++)
-           	   {
-			       Cell cell = row.getCell(i, Row.CREATE_NULL_AS_BLANK);
-                   
-                   if(i!=4)
-                   {
-                                switch (cell.getCellType()) 
-                                {
-                                case Cell.CELL_TYPE_STRING:              
-                                        String place = cell.toString();
-                                        rows.add(place);        
-                                        break;
-                                case Cell.CELL_TYPE_BLANK:
-                                        String value = "";
-                                        rows.add(value); 
-                                        break;
-                                case Cell.CELL_TYPE_NUMERIC:
-                                        String number = cell.toString();
-                                        rows.add(number); 
-                                        break;
-                                }
-                //                inputMap.put(count, rows);
-                   }
-                 inputMap.put(count, rows);
-              }
-         
-       
+            for (Iterator<Row> rit = firstSheet.rowIterator(); rit.hasNext();)
+            {
+                ArrayList<String> cells = new ArrayList<String>();
+                int count = 0;
+                Row row = rit.next();
 
-			  workbook.close();
-               
-                for(int key : inputMap.keySet())
+                for(int i = 0; i<7; i++)
                 {
-                
-                        ArrayList<String> fields = inputMap.get(key);
-                
-                        //System.out.println(fields);
-                
-                        fieldMap = answerMap(fields);   
+                    Cell cell = row.getCell(i, Row.CREATE_NULL_AS_BLANK);
+
+                    if(i!=4)
+                    {
+                        switch (cell.getCellType()) 
+                        {
+                            case Cell.CELL_TYPE_STRING:              
+                            String place = cell.toString();
+                            cells.add(place);        
+                            break;
+                            case Cell.CELL_TYPE_BLANK:
+                            String value = "";
+                            cells.add(value); 
+                            break;
+                            case Cell.CELL_TYPE_NUMERIC:
+                            String number = cell.toString();
+                            cells.add(number); 
+                            break;
+                        }
+                    }
+                    _rows.put(count, cells);
                 }
-           } //floater
+
+                workbook.close();
+
+                for(int key : _rows.keySet())
+                {
+                    ArrayList<String> fields = _rows.get(key);
+                    _zipcodeMap = getZipcodeMap(fields);   
+                }
+            }
               
-        	for(int Key : fieldMap.keySet())
-        	{
-                Object zipcode = fieldMap.get(Key);
-       
+            for(int Key : _zipcodeMap.keySet())
+            {
+                Object zipcode = _zipcodeMap.get(Key);
+
                 List<String> list = new ArrayList<String>();
                 String Zipcode = zipcode.toString();
                 list.add(Zipcode); 
-      
+
                 String[] name = fileName.split("\\.");
-		shortName = name[0] + ".txt";	
-                fullName = FILEPATH + name[0] + ".txt";
-      
+                shortName = name[0] + ".txt";	
+                fullName = _filePath + name[0] + ".txt";
+
                 useBufferedWriter(list, fullName);
-              //  workbook.close();     
-        	}
+            }
         
-           fieldMap.clear();
-           inputMap.clear();    
-        /*	request.setAttribute("message", fileName + " converted to text and edited");
-        	getServletContext().getRequestDispatcher("/response.jsp").forward(
-                request, response); */
-           File file = new File(request.getServletContext().getAttribute("FILES_DIR")+File.separator+shortName);
-                System.out.println("Absolute Path at server="+file.getAbsolutePath());
-                //fileItem.write(file);
-                out.write("File "+shortName+ " uploaded successfully.");
-                out.write("<br>");
-                out.write("<a href=\"FileUploadServlet?shortName="+shortName+"\">Download "+shortName+"</a>");
-                
+            _zipcodeMap.clear();
+            _rows.clear();    
+            File file = new File(request.getServletContext().getAttribute("FILES_DIR")+File.separator+shortName);
+            out.write("File "+shortName+ " uploaded successfully.");
+            out.write("<br>");
+            out.write("<a href=\"FileUploadServlet?shortName="+shortName+"\">Download "+shortName+"</a>");
+
         }        
-  }
-  
-   protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        String fileName = request.getParameter("shortName");
-        if(fileName == null || fileName.equals("")){
-            throw new ServletException("File Name can't be null or empty");
-        }
-        File file = new File(request.getParameter("FILEPATH")+File.separator+fileName);
-        if(!file.exists()){
-            throw new ServletException("File doesn't exist on server.");
-        }
-        System.out.println("File location on server::"+file.getAbsolutePath());
-        ServletContext ctx = getServletContext();
-        InputStream fis = new FileInputStream(file);
-        String mimeType = ctx.getMimeType(file.getAbsolutePath());
-        response.setContentType(mimeType != null? mimeType:"application/octet-stream");
-        response.setContentLength((int) file.length());
-        response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
-         
-        ServletOutputStream os       = response.getOutputStream();
-        byte[] bufferData = new byte[1024];
-        int read=0;
-        while((read = fis.read(bufferData))!= -1){
-            os.write(bufferData, 0, read);
-        }
-        os.flush();
-        os.close();
-        fis.close();
-        System.out.println("File downloaded at client successfully");
     }
   
-    /**
-     * Utility method to get file name from HTTP header content-disposition
-     */
-    private String getFileName(Part part) {
+    //NO GET METHOD FOR NOW...
+    //protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        //doPost(request, response); //just forward for now
+    //}
+  
+    private String getFileName(Part part) throws Exception {
+        /** getFileName: get file name from HTTP header content-disposition.  */
+
         String contentDisp = part.getHeader("content-disposition");
         System.out.println("content-disposition header= "+contentDisp);
         String[] tokens = contentDisp.split(";");
@@ -201,96 +175,93 @@ public class FileUploadServlet extends HttpServlet
                 return token.substring(token.indexOf("=") + 2, token.length()-1);
             }
         }
-        return "";
+        throw new NullPointerException("Request header did not contain a file name.");
+        return null;
     }
 
-public static HashMap<Integer, Object> answerMap(ArrayList<String> fieldArr)
-{
-		int count = fieldMap.size()+1; //because header was added above, count == 1, so each addt'l line is count++
-	   	 
-		String zip = fieldArr.get(0);
-		String type = fieldArr.get(1);
-		String city = fieldArr.get(2);
-		String acceptableCity = fieldArr.get(3);
-		String state = fieldArr.get(4);
-		String county = fieldArr.get(5);
+    public static HashMap<Integer, Zipcode> getZipcodeMap(ArrayList<String> fieldArr)
+    {
+        int count = 1; //start at 1 to skip the header. TODO is there still a header?
+
+        String zip  = fieldArr.get(_FIELDS.zip);
+        String type = fieldArr.get(_FIELDS.type);
+        String city = fieldArr.get(_FIELDS.city);
+        String state  = fieldArr.get(_FIELDS.state);
+        String county = fieldArr.get(_FIELDS.county);
+        String acceptableCity = fieldArr.get(_FIELDS.acceptableCity);
+
+        String fullZip = fiveDigit(zip);
+
+        //processes lines with only one city for given zip
+        if(type.equals("STANDARD") && acceptableCity.equals("") && !county.equals(""))
+        {
+            Zipcode zpcd = new Zipcode(fullZip, city, state, county);
+            _zipcodeMap.put(count, zpcd);
+        }
+        //this block processes lines that have only one addt'l city for given zip
+        else if(type.equals("STANDARD") && !acceptableCity.equals("") && !acceptableCity.contains(",") && !county.equals(""))
+        {
+            //passes primary city into map
+            Zipcode zpcd = new Zipcode(fullZip, city, state, county);
+            _zipcodeMap.put(count, zpcd);
+            city = acceptableCity; //acceptable name swapped in place of primary name
+            count++;
+            //addit'l city passed to map
+            Zipcode zipcode = new Zipcode(fullZip, city, state, county);
+            _zipcodeMap.put(count, zipcode);
+        }
+        else if(type.equals("STANDARD") && !acceptableCity.equals("") && acceptableCity.contains(",") && !county.equals(""))
+        {
+            multiCity(fieldArr);
+        }
+        return _zipcodeMap;	
+    }
 	
-		String fullZip = fiveDigit(zip);
-		
-		//processes lines with only one city for given zip
-		if(type.equals("STANDARD") && acceptableCity.equals("") && !county.equals(""))
-		{
-			
-			Zipcode zpcd = new Zipcode(fullZip, city, state, county);
-			fieldMap.put(count, zpcd);
-		}
-		//this block processes lines that have only one addt'l city for given zip
-		else if(type.equals("STANDARD") && !acceptableCity.equals("") && !acceptableCity.contains(",") && !county.equals(""))
-		{
-			//passes primary city into map
-			Zipcode zpcd = new Zipcode(fullZip, city, state, county);
-			fieldMap.put(count, zpcd);
-		//	logger.info("primary city added: "+city+", "+zip);
-			
-			city = acceptableCity; //acceptable name swapped in place of primary name
-			count++;
-			//addit'l city passed to map
-			Zipcode zipcode = new Zipcode(fullZip, city, state, county);
-			fieldMap.put(count, zipcode);
-		//	logger.info("acceptable city added: "+city+", "+zip);
-			
-		}
-		//this block processes lines that have several, comma-delimited acceptable cities
-		else if(type.equals("STANDARD") && !acceptableCity.equals("") && acceptableCity.contains(",") && !county.equals(""))
-		{
-			multiCity(fieldArr);
-		}
-	   	 
-		return fieldMap;	
-	   	 
-	}
-	
-	//method processes lines with multiple, comma-delimited acceptable cities
 	public static HashMap<Integer,Object> multiCity(ArrayList<String> fieldArr)
 	{
-		int count = fieldMap.size();
+        /* multiCity: processes lines with multiple, comma-delimited acceptable
+         * cities. */
+
+		int count = _zipcodeMap.size();
 		
-		String zip = fieldArr.get(0);
- 	//	String type = fieldArr.get(1);
-		String city = fieldArr.get(2);
-		String acceptableCity = fieldArr.get(3);
-		String state = fieldArr.get(4);
-		String county = fieldArr.get(5);
+		String zip  = fieldArr.get(_FIELDS.zip);
+ 	  //String type = fieldArr.get(_FIELDS.type); //why is this line commented out?
+		String city = fieldArr.get(_FIELDS.city);
+		String state  = fieldArr.get(_FIELDS.state);
+		String county = fieldArr.get(_FIELDS.county);
+		String acceptableCity = fieldArr.get(_FIELDS.acceptableCity);
 		
 		String fullZip = fiveDigit(zip);
 	
 		//creates hashmap entry for primary city
 		Zipcode zpcd = new Zipcode(fullZip, city, state, county);
-		fieldMap.put(count, zpcd);
-		//logger.info("primary city added: "+city+", "+zip);
+		_zipcodeMap.put(count, zpcd);
 		count++;
 	
 		String[] cities = acceptableCity.split(",");
-		for(String ciudad : cities)
-		{
+		for(String ciudad : cities) {
 			//creates entry for each addt'l city name for given zipcode
 			Zipcode zipcode = new Zipcode(fullZip, ciudad.trim(), state, county);
-			fieldMap.put(count, zipcode);
+			_zipcodeMap.put(count, zipcode);
 			//logger.info("acceptable city added: "+ciudad+", "+zip);
 			count++;
-		
 		}
- 
-	
-		return fieldMap;	
+		return _zipcodeMap;	
 	}
  
 	public static String fiveDigit(String zip)
 	{
+        /* fiveDigit: extracts the primary zip code (the 90210 in 90210-1234),
+         * discarding the +4 addons. If the remaining zip code is less than 5
+         * digits long, it is zero-padded on the left. */
 		
-		String[] zipSplit = zip.split("\\.");
+		String[] zipSplit = zip.split("\\."); //TODO: is this correct?
 		zip= zipSplit[0];
 		
+        //Perhaps the following could be replaced with this?:
+        //while ( zip.length() < 5 ) zip += "0"+zip;
+        //return zip;
+
 		if(zip.length()==5)
 		{
 			return zip;
@@ -303,50 +274,47 @@ public static HashMap<Integer, Object> answerMap(ArrayList<String> fieldArr)
 		{
 			zip = "00"+zip;
 		}
- 	
 		return zip;
 	}
 	
-	public static void useBufferedWriter(List<String> content, String filePath)
+	public static void useBufferedWriter(List<String> content, String path)
     {
-    	File file = new File(filePath);
+        /* useBufferedWriter: creates/appends file at `path' with string
+         * contents `content'. */
+
+    	File file = new File(path);
     	Writer fileWriter = null;
     	BufferedWriter bufferedWriter = null;
     	
-    	try{
-    		
-    		fileWriter = new FileWriter(file, true);
-    		bufferedWriter = new BufferedWriter(fileWriter);
-    		
-    			for (String line : content)
-    			{
-    				line += System.getProperty("line.separator");
-    				bufferedWriter.write(line);
+    	try {
+            fileWriter = new FileWriter(file, true);
+            bufferedWriter = new BufferedWriter(fileWriter);
 
-    			}
-    	
-    	 } 
-    	catch (IOException e) 
-    	{
-    		 System.err.println("Error writing the file : ");
-    		 e.printStackTrace();
-    	 } 
+            for (String line : content)
+            {
+                line += System.getProperty("line.separator");
+                bufferedWriter.write(line);
+            }
+        } 
+        catch (IOException e) 
+        {
+            System.err.println("Error writing the file : ");
+            e.printStackTrace();
+        } 
     	finally 
     	{
-    		 
-    		 if (bufferedWriter != null && fileWriter != null)
-    		 {
-    			 try 
-    			 {
-    				bufferedWriter.close();
-    				fileWriter.close();
-    			 } 
-    			 catch(IOException e)
-    			 {	 
-    				 e.printStackTrace();
-    			 }
-    		 }
-    	 }    		 
+            if (bufferedWriter != null && fileWriter != null)
+            {
+                try 
+                {
+                    bufferedWriter.close();
+                    fileWriter.close();
+                } 
+                catch(IOException e)
+                {
+                    e.printStackTrace();
+                }
+            }
+        } 
     }
 }
-
